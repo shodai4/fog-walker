@@ -1,0 +1,24 @@
+{
+  "name": "FogWalker",
+  "short_name": "FogWalker",
+  "description": "日常の散歩をレトロRPGの冒険に変える、極限デフォルメ霧晴らしPWAアプリ",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f141c",
+  "theme_color": "#1a202c",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
