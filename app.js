@@ -360,6 +360,7 @@
         playFanfare();
       } else {
         playBlip(1200, 0.04);
+        if (state.soundEnabled && navigator.vibrate) navigator.vibrate(12);
       }
 
       updateStreak();
@@ -936,6 +937,10 @@
   // ==========================================
   function setupEvents() {
     window.addEventListener('resize', resizeCanvas);
+
+    // オフライン／オンラインの状態通知
+    window.addEventListener('offline', () => showToast('OFFLINE: 記録は端末内に保存されます'));
+    window.addEventListener('online', () => showToast('ONLINE: 同期可能な状態に戻りました'));
 
     // D-Pad ボタン操作
     document.getElementById('btnPadUp')?.addEventListener('click', () => moveVirtual(1, 0));
