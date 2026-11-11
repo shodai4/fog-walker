@@ -45,8 +45,15 @@
     streak: 1,
     lastActiveDate: '',
 
+    // 今日の記録（日付が変わったらリセット）
+    daily: { date: '', tiles: 0, distance: 0 },
+
+    // 実績（解除済みIDの配列）
+    achievements: [],
+
     // 動作モード
     mode: 'gps', // 'gps' | 'dpad'
+    gpsMode: 'high', // 'high' | 'eco'
     gpsWatchId: null,
     gpsActive: false,
 
@@ -241,11 +248,15 @@
               if (m.key === 'streak') state.streak = m.value;
               if (m.key === 'lastActiveDate') state.lastActiveDate = m.value;
               if (m.key === 'totalDistance') state.totalDistance = m.value;
+              if (m.key === 'daily' && m.value && typeof m.value === 'object') state.daily = m.value;
+              if (m.key === 'gpsMode' && (m.value === 'high' || m.value === 'eco')) state.gpsMode = m.value;
+              if (m.key === 'achievements' && Array.isArray(m.value)) state.achievements = m.value;
             });
           }
         };
 
         tx.oncomplete = () => {
+          rolloverDaily();
           applyTheme(state.themeIndex);
           updateUI();
           resolve();
@@ -329,9 +340,14 @@
       const oldLevel = Math.floor(Math.sqrt(oldTileCount / 10)) + 1;
       const newLevel = Math.floor(Math.sqrt(newTotal / 10)) + 1;
 
+      // 今日の記録に加算
+      rolloverDaily();
+      state.daily.tiles += newTileCount;
+      saveMetaToDB('daily', state.daily);
+
       if (newLevel > oldLevel) {
         state.level = newLevel;
-        showLevelUpToast(newLevel);
+        showToast(`LEVEL UP! [LV: ${String(newLevel).padStart(2, '0')}] NEW HORIZON UNLOCKED`);
         playFanfare();
       } else {
         playBlip(1200, 0.04);
@@ -339,17 +355,65 @@
 
       updateStreak();
       updateUI();
+      checkMilestones();
     }
   }
 
-  function showLevelUpToast(level) {
+  // 日付が変わっていたら今日の記録をリセット
+  function rolloverDaily() {
+    const today = getTodayString();
+    if (!state.daily || state.daily.date !== today) {
+      state.daily = { date: today, tiles: 0, distance: 0 };
+      saveMetaToDB('daily', state.daily);
+    } else {
+      if (!Number.isFinite(state.daily.tiles)) state.daily.tiles = 0;
+      if (!Number.isFinite(state.daily.distance)) state.daily.distance = 0;
+    }
+  }
+
+  // 実績の定義（タイル数・総距離・連続日数）
+  const MILESTONES = [
+    { id: 'tiles_100', label: '100 TILES EXPLORED', check: () => state.tiles.size >= 100 },
+    { id: 'tiles_500', label: '500 TILES EXPLORED', check: () => state.tiles.size >= 500 },
+    { id: 'tiles_1000', label: '1,000 TILES EXPLORED', check: () => state.tiles.size >= 1000 },
+    { id: 'tiles_5000', label: '5,000 TILES EXPLORED', check: () => state.tiles.size >= 5000 },
+    { id: 'dist_1km', label: '1 km WALKED', check: () => state.totalDistance >= 1000 },
+    { id: 'dist_5km', label: '5 km WALKED', check: () => state.totalDistance >= 5000 },
+    { id: 'dist_10km', label: '10 km WALKED', check: () => state.totalDistance >= 10000 },
+    { id: 'streak_3', label: '3 DAYS STREAK', check: () => state.streak >= 3 },
+    { id: 'streak_7', label: '7 DAYS STREAK', check: () => state.streak >= 7 },
+    { id: 'streak_30', label: '30 DAYS STREAK', check: () => state.streak >= 30 }
+  ];
+
+  function checkMilestones() {
+    let unlockedSomething = false;
+    MILESTONES.forEach((m) => {
+      if (!state.achievements.includes(m.id) && m.check()) {
+        state.achievements.push(m.id);
+        showToast(`[ACHV] ${m.label}`);
+        playFanfare();
+        unlockedSomething = true;
+      }
+    });
+    if (unlockedSomething) {
+      saveMetaToDB('achievements', state.achievements);
+      updateUI();
+    }
+  }
+
+  // トースト通知（レベルアップ・実績共用）
+  function showToast(text) {
     const toast = document.getElementById('toastNotification');
     const msg = document.getElementById('toastMessage');
     if (toast && msg) {
-      msg.textContent = `LEVEL UP! [LV: ${String(level).padStart(2, '0')}] NEW HORIZON UNLOCKED`;
+      msg.textContent = text;
       toast.classList.remove('hidden');
+      toast.classList.remove('toast-active');
+      // アニメーションを確実に再生し直すため、一度リフローする
+      void toast.offsetWidth;
       toast.classList.add('toast-active');
-      setTimeout(() => {
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => {
         toast.classList.remove('toast-active');
         toast.classList.add('hidden');
       }, 3300);
@@ -414,6 +478,12 @@
       elCoords.textContent = `LOC: ${state.lat.toFixed(4)}, ${state.lng.toFixed(4)}`;
     }
 
+    // 今日の記録
+    const elToday = document.getElementById('statToday');
+    if (elToday) {
+      elToday.textContent = `TODAY: +${state.daily.tiles} tiles / ${Math.round(state.daily.distance)}m`;
+    }
+
     // モーダル側
     const modalStreak = document.getElementById('modalStreak');
     if (modalStreak) modalStreak.textContent = streakDays;
@@ -425,6 +495,15 @@
     if (modalDist) modalDist.textContent = Math.round(state.totalDistance).toLocaleString();
     const modalGlobal = document.getElementById('modalGlobal');
     if (modalGlobal) modalGlobal.textContent = `${pct.toFixed(8)}%`;
+
+    const modalToday = document.getElementById('modalToday');
+    if (modalToday) {
+      modalToday.textContent = `${state.daily.tiles} マス / ${Math.round(state.daily.distance).toLocaleString()} m`;
+    }
+    const modalAchv = document.getElementById('modalAchievements');
+    if (modalAchv) {
+      modalAchv.textContent = `${state.achievements.length} / ${MILESTONES.length}`;
+    }
   }
 
   // ==========================================
@@ -562,7 +641,7 @@
 
     const scaleX = mapAreaW / (spanLng + 4);
     const scaleY = mapAreaH / (spanLat + 4);
-    const pScale = Math.min(scaleX, scaleY, 40);
+    const pScale = Math.min(scaleX, scaleY, 72);
 
     const midLatIdx = (minLatIdx + maxLatIdx) / 2;
     const midLngIdx = (minLngIdx + maxLngIdx) / 2;
@@ -626,19 +705,47 @@
     pCtx.fillText(`${state.lat.toFixed(4)}°N, ${state.lng.toFixed(4)}°E`, 280, 1500);
 
     pCtx.fillStyle = '#737373';
+    pCtx.fillText('> TOTAL DISTANCE:', 80, 1500);
+    pCtx.fillStyle = '#ffffff';
+    pCtx.fillText(`${Math.round(state.totalDistance).toLocaleString()} m`, 280, 1500);
+
+    pCtx.fillStyle = '#737373';
     pCtx.fillText('> DATE ARCHIVED:', 700, 1435);
     pCtx.fillStyle = '#ffffff';
     pCtx.fillText(getTodayString(), 880, 1435);
+
+    pCtx.fillStyle = '#737373';
+    pCtx.fillText('> COORDINATES:', 700, 1468);
+    pCtx.fillStyle = '#ffffff';
+    pCtx.fillText(`${state.lat.toFixed(4)}°N, ${state.lng.toFixed(4)}°E`, 880, 1468);
 
     pCtx.fillStyle = '#525252';
     pCtx.font = '14px "JetBrains Mono", monospace';
     pCtx.fillText('Created with for お絵描き楽しも委員会（しょうだい）', 700, 1500);
 
-    // 6. 画像ダウンロード実行
+    // 6. 画像ダウンロード / 共有
     posterCanvas.toBlob((blob) => {
       if (!blob) return;
-      downloadBlob(blob, `fogwalker_poster_${getTodayString().replace(/-/g, '')}.png`);
+      shareOrDownload(blob, `fogwalker_poster_${getTodayString().replace(/-/g, '')}.png`);
     }, 'image/png');
+  }
+
+  // 共有シートが使える端末では共有、使えなければダウンロード
+  function shareOrDownload(blob, filename) {
+    try {
+      const file = new File([blob], filename, { type: blob.type || 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator
+          .share({
+            files: [file],
+            title: 'FogWalker',
+            text: '歩いた場所だけが、光る。 // TRAJECTORY POSTER'
+          })
+          .catch(() => downloadBlob(blob, filename));
+        return;
+      }
+    } catch (_) {}
+    downloadBlob(blob, filename);
   }
 
   // Blob をファイルとしてダウンロードさせる共通処理
@@ -664,6 +771,10 @@
       if (d > 0.5) {
         state.totalDistance += d;
         saveMetaToDB('totalDistance', state.totalDistance);
+        rolloverDaily();
+        state.daily.distance += d;
+        saveMetaToDB('daily', state.daily);
+        checkMilestones();
       }
     }
     state.lastLat = lat;
@@ -680,23 +791,27 @@
       return;
     }
 
-    setGpsStatus('GPS: ACQUIRING...', '#f59e0b');
+    const eco = state.gpsMode === 'eco';
+    setGpsStatus(eco ? 'GPS: ACQUIRING... (ECO)' : 'GPS: ACQUIRING...', '#f59e0b');
     state.gpsActive = true;
 
     state.gpsWatchId = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
-        setGpsStatus(`GPS: ACTIVE (±${Math.round(accuracy)}m)`, '#22c55e');
+        // 省電力モードでは精度の粗い測位を捨てる
+        if (eco && accuracy > 100) {
+          setGpsStatus(`GPS: ECO (±${Math.round(accuracy)}m / skip)`, '#f59e0b');
+          return;
+        }
+        setGpsStatus(`GPS: ACTIVE${eco ? ' (ECO)' : ''} (±${Math.round(accuracy)}m)`, '#22c55e');
         handleLocationUpdate(latitude, longitude);
       },
       (err) => {
         setGpsStatus(`GPS: ERROR (${err.code})`, '#ef4444');
       },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 1000,
-        timeout: 15000
-      }
+      eco
+        ? { enableHighAccuracy: false, maximumAge: 30000, timeout: 60000 }
+        : { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
     );
   }
 
@@ -809,6 +924,44 @@
       document.getElementById('menuModal')?.classList.add('hidden');
     });
 
+    // GPS 精度モード（高精度 / 省電力）切替
+    const btnGpsMode = document.getElementById('btnToggleGpsMode');
+    const syncGpsModeButton = () => {
+      if (btnGpsMode) btnGpsMode.textContent = state.gpsMode === 'eco' ? 'GPS: ECO' : 'GPS: HIGH';
+    };
+    syncGpsModeButton();
+    btnGpsMode?.addEventListener('click', () => {
+      playBlip(900, 0.03);
+      state.gpsMode = state.gpsMode === 'eco' ? 'high' : 'eco';
+      saveMetaToDB('gpsMode', state.gpsMode);
+      syncGpsModeButton();
+      if (state.mode === 'gps') {
+        stopGPS();
+        startGPS();
+      }
+    });
+
+    // JSONバックアップの復元（インポート）
+    document.getElementById('btnImportData')?.addEventListener('click', () => {
+      playBlip(1000, 0.04);
+      document.getElementById('importFile')?.click();
+    });
+    document.getElementById('importFile')?.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(String(reader.result));
+          importBackup(data);
+        } catch (err) {
+          alert('読み込みに失敗しました。FogWalkerのバックアップJSONを選んでください。');
+        }
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    });
+
     // メニューモーダル
     const menuModal = document.getElementById('menuModal');
     document.getElementById('btnOpenMenu')?.addEventListener('click', () => {
@@ -849,6 +1002,9 @@
             state.streak = 1;
             state.totalDistance = 0;
             state.lastActiveDate = '';
+            state.achievements = [];
+            state.daily = { date: getTodayString(), tiles: 0, distance: 0 };
+            saveMetaToDB('daily', state.daily);
             revealTilesAt(state.lat, state.lng);
             updateUI();
             alert('データを初期化しました。');
@@ -860,7 +1016,60 @@
   }
 
   // ==========================================
-  // 13. アプリ起動エントリポイント
+  // 13. バックアップJSONの復元
+  // ==========================================
+  function importBackup(data) {
+    const tiles = Array.isArray(data && data.tiles) ? data.tiles : null;
+    if (!tiles) {
+      alert('バックアップ形式が違います（tiles配列が見つかりません）。');
+      return;
+    }
+
+    const valid = tiles.filter(
+      (t) => t && typeof t.id === 'string' && Number.isFinite(t.latIdx) && Number.isFinite(t.lngIdx)
+    );
+    if (valid.length === 0) {
+      alert('有効なマスデータが含まれていません。');
+      return;
+    }
+
+    const before = state.tiles.size;
+    const ok = confirm(`バックアップから ${valid.length.toLocaleString()} マスを読み込みます。\n現在の ${before.toLocaleString()} マスに統合します（既存データは消しません）。よろしいですか？`);
+    if (!ok) return;
+
+    let added = 0;
+    valid.forEach((t) => {
+      const tile = {
+        id: t.id,
+        latIdx: t.latIdx,
+        lngIdx: t.lngIdx,
+        exploredAt: Number.isFinite(t.exploredAt) ? t.exploredAt : Date.now()
+      };
+      if (!state.tiles.has(tile.id)) {
+        state.tiles.set(tile.id, tile);
+        saveTileToDB(tile);
+        added++;
+      }
+    });
+
+    if (Number.isFinite(data.totalDistance) && data.totalDistance > state.totalDistance) {
+      state.totalDistance = Math.round(data.totalDistance);
+      saveMetaToDB('totalDistance', state.totalDistance);
+    }
+    if (Number.isFinite(data.streak) && data.streak > state.streak) {
+      state.streak = data.streak;
+      saveMetaToDB('streak', state.streak);
+    }
+
+    updateUI();
+    checkMilestones();
+    playFanfare();
+    alert(`復元完了：新規 ${added.toLocaleString()} マスを追加しました（合計 ${state.tiles.size.toLocaleString()} マス）。`);
+    document.getElementById('menuModal')?.classList.add('hidden');
+  }
+
+  // ==========================================
+  // 14. アプリ起動エントリポイント
   // ==========================================
   async function init() {
     state.canvas = document.getElementById('gameCanvas');

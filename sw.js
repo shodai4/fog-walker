@@ -5,7 +5,7 @@
  * - それ以外の資産はキャッシュ優先：オフラインでも動く
  */
 
-const CACHE_NAME = 'fogwalker-v2-1';
+const CACHE_NAME = 'fogwalker-v2-2';
 const ASSETS = [
   './',
   './index.html',
