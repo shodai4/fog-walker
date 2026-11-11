@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>FogWalker v2.2 - 歩いた場所だけが、光る。</title>
+  <title>FogWalker v2.3 - 歩いた場所だけが、光る。</title>
   <meta name="description" content="歩いた場所だけが白く光る、黒基調・コマンドプロンプト風の極限ミニマル位置情報アプリ">
   <meta name="theme-color" content="#000000">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -93,7 +93,7 @@
         <div class="flex items-center space-x-1.5 font-bold">
           <span class="theme-accent">&gt;</span>
           <span class="text-white">FOG_WALKER</span>
-          <span class="text-[10px] text-neutral-500">v2.2</span>
+          <span class="text-[10px] text-neutral-500">v2.3</span>
           <span id="headerBlinker" class="inline-block w-1.5 h-3 bg-emerald-500 blinking-cursor ml-1"></span>
         </div>
         <div class="text-[11px] text-neutral-400">
@@ -216,6 +216,11 @@
           <div>地球開拓進捗: <span id="modalGlobal" class="theme-accent font-bold">0.00000000%</span></div>
           <div>今日の記録: <span id="modalToday" class="text-white font-bold">0 マス / 0 m</span></div>
           <div>実績: <span id="modalAchievements" class="text-white font-bold">0 / 10</span></div>
+        </div>
+
+        <div class="bg-black p-2 border border-neutral-900 rounded space-y-2">
+          <div class="text-neutral-500 text-[10px]">&gt; ACTIVITY (7 DAYS)</div>
+          <div id="weeklyChart" class="flex items-end space-x-1 px-1"></div>
         </div>
 
         <div class="bg-black p-2 border border-neutral-900 rounded space-y-2">

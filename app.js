@@ -1,5 +1,5 @@
 /**
- * FogWalker v2.1 - コアスクリプト
+ * FogWalker v2.3 - コアスクリプト
  * 「歩いた場所だけが、光る。」
  * 黒基調・コマンドプロンプト風 極限ミニマル位置情報PWA
  */
@@ -50,6 +50,9 @@
 
     // 実績（解除済みIDの配列）
     achievements: [],
+
+    // 直近の日別記録（ヒートマップ用、最大60日）
+    history: [],
 
     // 動作モード
     mode: 'gps', // 'gps' | 'dpad'
@@ -251,6 +254,7 @@
               if (m.key === 'daily' && m.value && typeof m.value === 'object') state.daily = m.value;
               if (m.key === 'gpsMode' && (m.value === 'high' || m.value === 'eco')) state.gpsMode = m.value;
               if (m.key === 'achievements' && Array.isArray(m.value)) state.achievements = m.value;
+              if (m.key === 'history' && Array.isArray(m.value)) state.history = m.value;
             });
           }
         };
@@ -363,12 +367,59 @@
   function rolloverDaily() {
     const today = getTodayString();
     if (!state.daily || state.daily.date !== today) {
+      pushDailyHistory(state.daily);
       state.daily = { date: today, tiles: 0, distance: 0 };
       saveMetaToDB('daily', state.daily);
     } else {
       if (!Number.isFinite(state.daily.tiles)) state.daily.tiles = 0;
       if (!Number.isFinite(state.daily.distance)) state.daily.distance = 0;
     }
+  }
+
+  // 日付が変わるときに前日までの記録を履歴に積む（直近60日分）
+  function pushDailyHistory(prev) {
+    if (!prev || !prev.date || !(prev.tiles > 0)) return;
+    const history = Array.isArray(state.history) ? state.history.slice() : [];
+    const idx = history.findIndex((h) => h.date === prev.date);
+    const entry = { date: prev.date, tiles: prev.tiles, distance: Math.round(prev.distance) };
+    if (idx >= 0) history[idx] = entry;
+    else history.push(entry);
+    history.sort((a, b) => (a.date < b.date ? -1 : 1));
+    state.history = history.slice(-60);
+    saveMetaToDB('history', state.history);
+  }
+
+  // 直近7日の開拓マス数（今日を含む）
+  function getWeeklySeries() {
+    const series = [];
+    const today = getTodayString();
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = formatDateString(d);
+      let tiles = 0;
+      if (key === today) {
+        tiles = state.daily.tiles || 0;
+      } else {
+        const hit = (state.history || []).find((h) => h.date === key);
+        if (hit) tiles = hit.tiles || 0;
+      }
+      series.push({ date: key, tiles, weekday: '日月火水木金土'[d.getDay()] });
+    }
+    return series;
+  }
+
+  function formatDateString(d) {
+    const parts = new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(d);
+    const y = parts.find((p) => p.type === 'year').value;
+    const m = parts.find((p) => p.type === 'month').value;
+    const day = parts.find((p) => p.type === 'day').value;
+    return `${y}-${m}-${day}`;
   }
 
   // 実績の定義（タイル数・総距離・連続日数）
@@ -500,10 +551,47 @@
     if (modalToday) {
       modalToday.textContent = `${state.daily.tiles} マス / ${Math.round(state.daily.distance).toLocaleString()} m`;
     }
-    const modalAchv = document.getElementById('modalAchievements');
-    if (modalAchv) {
-      modalAchv.textContent = `${state.achievements.length} / ${MILESTONES.length}`;
+    const modalOverall = document.getElementById('modalAchievements');
+    if (modalOverall) {
+      modalOverall.textContent = `${state.achievements.length} / ${MILESTONES.length}`;
     }
+
+    renderWeeklyChart();
+  }
+
+  // 直近7日の開拓マス数をミニ棒グラフで描く
+  function renderWeeklyChart() {
+    const chart = document.getElementById('weeklyChart');
+    if (!chart) return;
+    const series = getWeeklySeries();
+    const max = Math.max(10, ...series.map((s) => s.tiles));
+    const theme = THEMES[state.themeIndex];
+
+    chart.textContent = '';
+    series.forEach((s) => {
+      const col = document.createElement('div');
+      col.className = 'flex-1 flex flex-col justify-end items-center space-y-0.5';
+
+      const barWrap = document.createElement('div');
+      barWrap.className = 'w-full flex items-end justify-center h-10';
+
+      const bar = document.createElement('div');
+      const h = Math.max(2, Math.round((s.tiles / max) * 40));
+      bar.style.height = `${h}px`;
+      bar.style.width = '10px';
+      bar.style.backgroundColor = s.tiles > 0 ? theme.primary : '#27272a';
+      bar.style.opacity = s.tiles > 0 ? '1' : '1';
+      bar.title = `${s.date}: ${s.tiles} tiles`;
+      barWrap.appendChild(bar);
+
+      const label = document.createElement('div');
+      label.className = 'text-[8px] text-neutral-500';
+      label.textContent = s.weekday;
+
+      col.appendChild(barWrap);
+      col.appendChild(label);
+      chart.appendChild(col);
+    });
   }
 
   // ==========================================
@@ -698,11 +786,6 @@
     pCtx.fillText('> STREAK & LEVEL:', 80, 1468);
     pCtx.fillStyle = '#ffffff';
     pCtx.fillText(`${state.streak} DAYS (LV.${String(state.level).padStart(2, '0')})`, 280, 1468);
-
-    pCtx.fillStyle = '#737373';
-    pCtx.fillText('> COORDINATES:', 80, 1500);
-    pCtx.fillStyle = '#ffffff';
-    pCtx.fillText(`${state.lat.toFixed(4)}°N, ${state.lng.toFixed(4)}°E`, 280, 1500);
 
     pCtx.fillStyle = '#737373';
     pCtx.fillText('> TOTAL DISTANCE:', 80, 1500);
@@ -901,14 +984,56 @@
       if (state.soundEnabled) playBlip(1100, 0.03);
     });
 
-    // ズーム操作
+    // ズーム操作（ボタン・ホイール・ピンチ）
+    const setScale = (next) => {
+      state.scale = Math.max(state.minScale, Math.min(state.maxScale, next));
+    };
     document.getElementById('btnZoomIn')?.addEventListener('click', () => {
       playBlip(950, 0.02);
-      state.scale = Math.min(state.maxScale, state.scale + 4);
+      setScale(state.scale + 4);
     });
     document.getElementById('btnZoomOut')?.addEventListener('click', () => {
       playBlip(850, 0.02);
-      state.scale = Math.max(state.minScale, state.scale - 4);
+      setScale(state.scale - 4);
+    });
+
+    // マウスホイールでズーム（PC用）
+    state.canvas.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        setScale(state.scale + (e.deltaY < 0 ? 3 : -3));
+      },
+      { passive: false }
+    );
+
+    // 2本指のピンチでズーム（スマホ用）
+    let pinchStartDist = 0;
+    let pinchStartScale = 0;
+    const touchDistance = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    state.canvas.addEventListener(
+      'touchstart',
+      (e) => {
+        if (e.touches.length === 2) {
+          pinchStartDist = touchDistance(e.touches);
+          pinchStartScale = state.scale;
+        }
+      },
+      { passive: true }
+    );
+    state.canvas.addEventListener(
+      'touchmove',
+      (e) => {
+        if (e.touches.length === 2 && pinchStartDist > 0) {
+          e.preventDefault();
+          const ratio = touchDistance(e.touches) / pinchStartDist;
+          setScale(pinchStartScale * ratio);
+        }
+      },
+      { passive: false }
+    );
+    state.canvas.addEventListener('touchend', () => {
+      pinchStartDist = 0;
     });
 
     // リセンターボタン
