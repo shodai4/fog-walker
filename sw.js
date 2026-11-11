@@ -3,7 +3,7 @@
  * オフライン動作 & PWAキャッシュ
  */
 
-const CACHE_NAME = 'fogwalker-v1';
+const CACHE_NAME = 'fogwalker-v2';
 const ASSETS = [
   './',
   './index.html',
