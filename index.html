@@ -3,249 +3,215 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>FogWalker - レトロRPG風 リアル街歩きマッピング</title>
-  <meta name="description" content="日常の散歩をレトロRPGの冒険に変える、極限デフォルメ霧晴らしPWAアプリ">
-  <meta name="theme-color" content="#1a202c">
+  <title>FogWalker v2.0 - 歩いた場所だけが、光る。</title>
+  <meta name="description" content="歩いた場所だけが白く光る、黒基調・コマンドプロンプト風の極限ミニマル位置情報アプリ">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap');
-    
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
     body {
       touch-action: manipulation;
       user-select: none;
       -webkit-user-select: none;
-      font-family: 'DotGothic16', monospace, sans-serif;
-      background-color: #0f141c;
-      color: #e2e8f0;
+      font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
+      background-color: #000000;
+      color: #e6edf3;
       overflow: hidden;
       margin: 0;
       padding: 0;
+      overscroll-behavior: none;
     }
 
-    .pixelated {
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
+    /* ターミナル風ボタンスタイル */
+    .cui-btn {
+      background-color: #0a0a0a;
+      border: 1px solid #262626;
+      color: #a3a3a3;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all 0.1s ease;
+    }
+    .cui-btn:active {
+      background-color: #262626;
+      color: #ffffff;
+      border-color: #525252;
+      transform: scale(0.97);
+    }
+    .cui-btn-accent {
+      border-color: #16a34a;
+      color: #22c55e;
+    }
+    .cui-btn-accent:active {
+      background-color: #14532d;
+      color: #4ade80;
     }
 
-    /* レトロ風ボタンスタイル */
-    .rpg-btn {
-      box-shadow: inset -2px -2px 0px 0px #1a202c, inset 2px 2px 0px 0px #718096;
-      transition: all 0.05s ease;
+    /* 点滅カーソルアニメーション */
+    @keyframes cursor-blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
     }
-    .rpg-btn:active {
-      box-shadow: inset 2px 2px 0px 0px #1a202c, inset -2px -2px 0px 0px #718096;
-      transform: translateY(1px);
-    }
-
-    /* レトロウィンドウ枠 */
-    .rpg-window {
-      border: 3px solid #e2e8f0;
-      outline: 2px solid #2d3748;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), inset 0 0 0 2px #4a5568;
+    .blinking-cursor {
+      animation: cursor-blink 0.8s infinite;
     }
 
-    /* モーダル背景 */
-    .modal-backdrop {
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
+    /* セーフエリア対応 */
+    .safe-top {
+      padding-top: max(8px, env(safe-area-inset-top));
+    }
+    .safe-bottom {
+      padding-bottom: max(8px, env(safe-area-inset-bottom));
     }
   </style>
 </head>
-<body class="h-screen w-screen flex flex-col justify-between relative select-none">
+<body class="h-screen w-screen flex flex-col justify-between relative bg-black select-none">
 
-  <!-- ヘッダー / ステータスバー -->
-  <header class="w-full bg-slate-900/90 border-b-2 border-slate-700 px-4 py-2 flex items-center justify-between z-20 shadow-md">
-    <div class="flex items-center space-x-2">
-      <span class="text-xl">🗡️</span>
-      <div>
-        <div class="flex items-center space-x-2">
-          <span class="text-xs font-bold text-emerald-400" id="playerTitle">見習い冒険者</span>
-          <span class="text-xs bg-slate-800 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/50" id="playerLevel">Lv.1</span>
+  <!-- CUIヘッダー / ステータスバー -->
+  <header class="w-full bg-black/90 border-b border-neutral-800 px-3 py-2 z-20 safe-top text-xs tracking-tight">
+    <div class="flex items-start justify-between">
+      <div class="space-y-0.5">
+        <div class="flex items-center space-x-1.5 font-bold">
+          <span class="text-emerald-500">&gt;</span>
+          <span class="text-white">FOG_WALKER</span>
+          <span class="text-[10px] text-neutral-500">v2.0</span>
+          <span id="headerBlinker" class="inline-block w-1.5 h-3 bg-emerald-500 blinking-cursor ml-1"></span>
         </div>
-        <div class="text-[10px] text-slate-400" id="playerCoords">測位待機中...</div>
+        <div class="text-[11px] text-neutral-400">
+          <span class="text-neutral-500">&gt;</span> STREAK: <span id="statStreak" class="text-amber-400 font-bold">1</span> days
+          <span class="text-neutral-600 mx-1">|</span>
+          TILES: <span id="statTiles" class="text-white font-bold">0</span> <span class="text-[10px] text-neutral-500" id="statLevel">(LV: 01)</span>
+        </div>
+        <div class="text-[10px] text-neutral-500 font-mono">
+          <span class="text-neutral-600">&gt;</span> GLOBAL: <span id="statGlobalPct" class="text-emerald-400">0.0000000%</span>
+          <span class="text-[9px] text-neutral-600" id="statGlobalCount">[0 / 2,266,958,222,222]</span>
+        </div>
       </div>
-    </div>
 
-    <!-- 探索状況カウンター -->
-    <div class="flex items-center space-x-3 text-right">
-      <div>
-        <div class="text-[10px] text-slate-400">開拓マス</div>
-        <div class="text-xs font-bold text-amber-400" id="statTiles">0 <span class="text-[9px] text-slate-500">マス</span></div>
+      <!-- 右上アクションボタン -->
+      <div class="flex items-center space-x-1.5">
+        <button id="btnToggleSound" class="cui-btn px-2 py-1 text-[10px] rounded" title="SE音量切替">
+          SE: ON
+        </button>
+        <button id="btnOpenMenu" class="cui-btn px-2 py-1 text-[10px] rounded" title="システムメニュー">
+          [ MENU ]
+        </button>
       </div>
-      <div>
-        <div class="text-[10px] text-slate-400">踏破距離</div>
-        <div class="text-xs font-bold text-sky-400" id="statDistance">0 <span class="text-[9px] text-slate-500">m</span></div>
-      </div>
-      <button id="btnOpenMenu" class="rpg-btn bg-slate-800 text-slate-200 border border-slate-600 px-2.5 py-1 text-xs rounded hover:bg-slate-700">
-        📜 メニュー
-      </button>
     </div>
   </header>
 
-  <!-- メインCanvasビューポート -->
-  <main class="flex-1 w-full relative overflow-hidden bg-slate-950 flex items-center justify-center">
-    <canvas id="gameCanvas" class="pixelated absolute inset-0 w-full h-full"></canvas>
+  <!-- メインCanvasビューポート（歩いた場所だけが白く光る） -->
+  <main class="flex-1 w-full relative overflow-hidden bg-black flex items-center justify-center">
+    <canvas id="gameCanvas" class="absolute inset-0 w-full h-full block"></canvas>
 
-    <!-- 発見トースト通知 -->
-    <div id="discoveryToast" class="absolute top-4 pointer-events-none transition-all duration-300 opacity-0 -translate-y-4 z-30">
-      <div class="rpg-window bg-slate-900/95 text-amber-300 px-4 py-2 rounded-lg flex items-center space-x-2 shadow-xl border-2 border-amber-400">
-        <span class="text-2xl" id="toastIcon">✨</span>
-        <div>
-          <div class="text-[10px] text-amber-200 font-bold tracking-wider">NEW DISCOVERY!</div>
-          <div class="text-xs font-bold text-white" id="toastText">新しいスポットを発見した！</div>
-        </div>
-      </div>
+    <!-- 測位ステータスバッジ（左下） -->
+    <div id="gpsStatusBadge" class="absolute top-2 left-2 z-10 bg-black/80 border border-neutral-800 text-neutral-400 text-[10px] px-2 py-0.5 rounded font-mono flex items-center space-x-1.5">
+      <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" id="gpsIndicator"></span>
+      <span id="gpsStatusText">GPS: INIT...</span>
     </div>
 
-    <!-- 測位ステータスオーバーレイ（GPS取得中・オフライン表示） -->
-    <div id="gpsLoadingBadge" class="absolute bottom-20 left-4 z-20 bg-slate-900/80 border border-slate-700 text-slate-300 text-[10px] px-2.5 py-1 rounded-full flex items-center space-x-1.5 shadow backdrop-blur-sm">
-      <span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-ping" id="gpsIndicator"></span>
-      <span id="gpsStatusText">GPS測位中...</span>
-    </div>
-
-    <!-- ズーム操作 / GPS追従ボタン -->
-    <div class="absolute right-3 bottom-20 z-20 flex flex-col space-y-2">
-      <button id="btnRecenter" class="rpg-btn w-9 h-9 bg-slate-800/90 text-white rounded-lg border border-slate-600 flex items-center justify-center text-sm shadow hover:bg-slate-700" title="自機位置に戻る">
-        🎯
-      </button>
-      <button id="btnToggleMode" class="rpg-btn w-9 h-9 bg-slate-800/90 text-amber-400 rounded-lg border border-slate-600 flex items-center justify-center text-sm shadow hover:bg-slate-700" title="GPS / 仮想操作切替">
-        🎮
+    <!-- リセンターボタン（右下） -->
+    <div class="absolute right-3 bottom-3 z-10">
+      <button id="btnRecenter" class="cui-btn w-9 h-9 rounded flex items-center justify-center text-xs text-white" title="自機位置に戻る">
+        [+]
       </button>
     </div>
   </main>
 
-  <!-- コントロールフッター（仮想散歩D-Pad & モード案内） -->
-  <footer class="w-full bg-slate-900/95 border-t-2 border-slate-800 px-4 py-2.5 z-20 flex items-center justify-between">
-    <!-- モード表示と切替 -->
-    <div class="flex flex-col">
-      <div class="text-[10px] text-slate-400 flex items-center space-x-1">
-        <span>動作モード:</span>
-        <span class="font-bold text-emerald-400" id="currentModeLabel">リアルGPS連動</span>
+  <!-- CUIコントロールフッター（下部） -->
+  <footer class="w-full bg-black/95 border-t border-neutral-800 px-3 py-2 z-20 safe-bottom">
+    <div class="flex items-center justify-between">
+      <!-- モード切替 & 座標 -->
+      <div class="space-y-0.5">
+        <div class="flex items-center space-x-1.5 text-xs">
+          <button id="btnToggleMode" class="cui-btn cui-btn-accent px-2 py-0.5 text-[10px] rounded font-bold">
+            MODE: GPS
+          </button>
+          <span class="text-[10px] text-neutral-500" id="modeHintText">外を歩くと光が広がります</span>
+        </div>
+        <div class="text-[9px] text-neutral-600 font-mono" id="playerCoords">
+          LOC: --.----, ---.----
+        </div>
       </div>
-      <div class="text-[9px] text-slate-500" id="modeHintText">外を歩くと自動で霧が晴れます</div>
+
+      <!-- 仮想散歩D-Pad（テスト用・矢印キー連動） -->
+      <div id="virtualDpad" class="flex items-center">
+        <div class="grid grid-cols-3 gap-1 w-24 h-16 items-center justify-center">
+          <div></div>
+          <button id="btnPadUp" class="cui-btn text-white text-[10px] py-1 rounded flex items-center justify-center">▲</button>
+          <div></div>
+          <button id="btnPadLeft" class="cui-btn text-white text-[10px] py-1 rounded flex items-center justify-center">◀</button>
+          <button id="btnPadCenter" class="cui-btn text-emerald-400 text-[9px] py-1 rounded flex items-center justify-center font-bold">●</button>
+          <button id="btnPadRight" class="cui-btn text-white text-[10px] py-1 rounded flex items-center justify-center">▶</button>
+          <div></div>
+          <button id="btnPadDown" class="cui-btn text-white text-[10px] py-1 rounded flex items-center justify-center">▼</button>
+          <div></div>
+        </div>
+      </div>
     </div>
 
-    <!-- 室内テスト用D-Pad（バーチャル散歩操作） -->
-    <div id="virtualDpad" class="flex items-center space-x-1">
-      <div class="grid grid-cols-3 gap-1 w-28 h-20 items-center justify-center">
-        <div></div>
-        <button id="btnPadUp" class="rpg-btn bg-slate-800 border border-slate-600 text-white text-xs py-1 rounded flex items-center justify-center hover:bg-slate-700">▲</button>
-        <div></div>
-        <button id="btnPadLeft" class="rpg-btn bg-slate-800 border border-slate-600 text-white text-xs py-1 rounded flex items-center justify-center hover:bg-slate-700">◀</button>
-        <button id="btnPadCenter" class="rpg-btn bg-slate-800 border border-slate-600 text-amber-300 text-[10px] py-1 rounded flex items-center justify-center hover:bg-slate-700 font-bold">●</button>
-        <button id="btnPadRight" class="rpg-btn bg-slate-800 border border-slate-600 text-white text-xs py-1 rounded flex items-center justify-center hover:bg-slate-700">▶</button>
-        <div></div>
-        <button id="btnPadDown" class="rpg-btn bg-slate-800 border border-slate-600 text-white text-xs py-1 rounded flex items-center justify-center hover:bg-slate-700">▼</button>
-        <div></div>
-      </div>
+    <!-- コピーライト & クレジット -->
+    <div class="text-[8px] text-neutral-600 text-center pt-1 font-mono">
+      Created with for お絵描き楽しも委員会（しょうだい）
     </div>
   </footer>
-  <div class="text-[9px] text-slate-500 text-center py-1 bg-slate-950 border-t border-slate-800/50">
-    Created with for お絵描き楽しも委員会（しょうだい）
-  </div>
 
-  <!-- メニュー & 図鑑モーダル -->
-  <div id="menuModal" class="fixed inset-0 modal-backdrop bg-black/75 z-50 flex items-center justify-center p-4 hidden">
-    <div class="rpg-window bg-slate-900 w-full max-w-md max-h-[85vh] rounded-lg flex flex-col overflow-hidden text-slate-200">
-      <!-- モーダルヘッダー -->
-      <div class="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center space-x-2">
-          <span class="text-lg">📜</span>
-          <h2 class="font-bold text-sm text-white">冒険の手帳 (Menu)</h2>
-        </div>
-        <button id="btnCloseMenu" class="text-slate-400 hover:text-white text-lg font-bold px-2">✕</button>
+  <!-- システムメニュー モーダル -->
+  <div id="menuModal" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-neutral-950 border border-neutral-800 w-full max-w-sm rounded p-4 text-neutral-300 space-y-3 font-mono text-xs">
+      <div class="flex items-center justify-between border-b border-neutral-800 pb-2">
+        <span class="text-white font-bold">&gt; SYSTEM_MENU</span>
+        <button id="btnCloseMenu" class="cui-btn px-2 py-0.5 text-[10px] rounded">[X]</button>
       </div>
 
-      <!-- モーダル本文（タブ切り替え） -->
-      <div class="flex border-b border-slate-800 text-xs bg-slate-950">
-        <button id="tabSpots" class="flex-1 py-2 text-center font-bold text-amber-400 border-b-2 border-amber-400">発見スポット図鑑</button>
-        <button id="tabSettings" class="flex-1 py-2 text-center text-slate-400 border-b-2 border-transparent">冒険記録 & 設定</button>
-        <button id="tabAbout" class="flex-1 py-2 text-center text-slate-400 border-b-2 border-transparent">作者について</button>
-      </div>
+      <div class="space-y-2 text-[11px]">
+        <div class="bg-black p-2 border border-neutral-900 rounded space-y-1">
+          <div class="text-neutral-500 text-[10px]">&gt; STATUS</div>
+          <div>連続開拓日数: <span id="modalStreak" class="text-amber-400 font-bold">1</span> 日</div>
+          <div>開拓済みマス: <span id="modalTiles" class="text-white font-bold">0</span> マス</div>
+          <div>踏破推定距離: <span id="modalDistance" class="text-sky-400 font-bold">0</span> m</div>
+          <div>地球開拓進捗: <span id="modalGlobal" class="text-emerald-400 font-bold">0.0000000%</span></div>
+        </div>
 
-      <div class="p-4 overflow-y-auto flex-1 space-y-4 text-xs">
-        <!-- スポット図鑑タブ -->
-        <div id="contentSpots" class="space-y-2">
-          <div class="text-[11px] text-slate-400 mb-2">散歩中に発見した駅、公園、神社、カフェなどの図鑑です。</div>
-          <div id="spotsList" class="space-y-1.5">
-            <div class="text-center py-8 text-slate-500 text-xs">まだ新しいスポットを発見していません。<br>外を歩いて冒険に出かけよう！</div>
+        <div class="bg-black p-2 border border-neutral-900 rounded space-y-2">
+          <div class="text-neutral-500 text-[10px]">&gt; DATA_MANAGEMENT (IndexedDB)</div>
+          <div class="text-[9px] text-neutral-500 leading-tight">
+            開拓マスデータは端末内部（IndexedDB）にのみ保存され、完全0円・オフラインで動作します。
+          </div>
+          <div class="flex space-x-1.5 pt-1">
+            <button id="btnExportData" class="cui-btn flex-1 py-1 text-[10px] rounded text-white">
+              [ EXPORT_JSON ]
+            </button>
+            <button id="btnResetData" class="cui-btn py-1 px-2 text-[10px] rounded text-rose-400 border-rose-900/50">
+              [ RESET ]
+            </button>
           </div>
         </div>
 
-        <!-- 冒険記録＆設定タブ -->
-        <div id="contentSettings" class="space-y-3 hidden">
-          <div class="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-1.5">
-            <div class="text-[11px] text-slate-400 font-bold">冒険の総合記録</div>
-            <div class="grid grid-cols-2 gap-2 text-xs">
-              <div class="bg-slate-900 p-2 rounded">
-                <div class="text-[9px] text-slate-500">総開拓マス</div>
-                <div class="font-bold text-amber-300 text-sm" id="detailTotalTiles">0 マス</div>
-              </div>
-              <div class="bg-slate-900 p-2 rounded">
-                <div class="text-[9px] text-slate-500">推定踏破距離</div>
-                <div class="font-bold text-sky-300 text-sm" id="detailTotalDistance">0 m</div>
-              </div>
-              <div class="bg-slate-900 p-2 rounded">
-                <div class="text-[9px] text-slate-500">発見したスポット</div>
-                <div class="font-bold text-emerald-300 text-sm" id="detailTotalSpots">0 箇所</div>
-              </div>
-              <div class="bg-slate-900 p-2 rounded">
-                <div class="text-[9px] text-slate-500">冒険者ランク</div>
-                <div class="font-bold text-purple-300 text-sm" id="detailRank">ビギナー</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-2">
-            <div class="text-[11px] text-slate-400 font-bold">データ管理（IndexedDBローカル保存）</div>
-            <p class="text-[10px] text-slate-500 leading-relaxed">
-              開拓データはお使いの端末（ブラウザ）の中にのみ安全に保存されています。外部サーバーには一切送信されません。
-            </p>
-            <div class="flex space-x-2 pt-1">
-              <button id="btnExportData" class="rpg-btn flex-1 bg-slate-800 text-slate-200 border border-slate-600 py-1.5 rounded text-[10px] hover:bg-slate-700">
-                📥 記録を書き出す (JSON)
-              </button>
-              <button id="btnResetData" class="rpg-btn bg-rose-950 text-rose-300 border border-rose-800 px-3 py-1.5 rounded text-[10px] hover:bg-rose-900">
-                ⚠️ データ初期化
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 作者についてタブ（画家ポートフォリオ＆送客リンク） -->
-        <div id="contentAbout" class="space-y-3 hidden">
-          <div class="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-2 text-center">
-            <div class="text-xl">🎨</div>
-            <div class="font-bold text-sm text-amber-300">FogWalker（フォグウォーカー）</div>
-            <div class="text-[10px] text-slate-400 leading-relaxed">
-              日常の何気ない散歩や育児のお散歩を、レトロゲームの冒険に変える個人開発PWAアプリです。
-            </div>
-          </div>
-
-          <div class="bg-slate-800/40 p-3 rounded border border-slate-700 space-y-2">
-            <div class="text-[11px] font-bold text-emerald-400">開発者・画家情報</div>
-            <p class="text-[10px] text-slate-400 leading-relaxed">
-              Created with for お絵描き楽しも委員会（しょうだい）<br>
-              日常のスケッチ原画や油絵作品の制作、アートZINEの執筆を行っています。
-            </p>
-            <div class="pt-1 flex flex-col space-y-1.5">
-              <a href="https://shodai4.github.io/sasabe-gacha/" target="_blank" rel="noopener noreferrer" class="rpg-btn block text-center bg-slate-800 border border-emerald-500/50 text-emerald-300 py-1.5 rounded text-[10px] hover:bg-slate-700">
-                🎲 笹部画材 3,000円ガチャを見る
-              </a>
-              <a href="https://thebase.com" target="_blank" rel="noopener noreferrer" class="rpg-btn block text-center bg-slate-800 border border-amber-500/50 text-amber-300 py-1.5 rounded text-[10px] hover:bg-slate-700">
-                🖼️ BASEショップ「お絵かき楽しも委員会」
-              </a>
-            </div>
+        <div class="bg-black p-2 border border-neutral-900 rounded space-y-1">
+          <div class="text-neutral-500 text-[10px]">&gt; LINKS</div>
+          <div class="flex flex-col space-y-1 text-[10px]">
+            <a href="https://shodai4.github.io/sasabe-gacha/" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:underline">
+              &gt; 笹部画材 3,000円ガチャ
+            </a>
+            <a href="https://thebase.com" target="_blank" rel="noopener noreferrer" class="text-amber-400 hover:underline">
+              &gt; BASE「お絵かき楽しも委員会」
+            </a>
           </div>
         </div>
       </div>
 
-      <!-- モーダルフッター -->
-      <div class="bg-slate-950 border-t border-slate-800 p-3 text-center">
-        <button id="btnConfirmClose" class="rpg-btn w-full bg-slate-800 text-white border border-slate-600 py-1.5 rounded text-xs font-bold hover:bg-slate-700">
-          冒険に戻る
+      <div class="pt-1">
+        <button id="btnConfirmClose" class="cui-btn w-full py-1 text-[11px] rounded text-white">
+          [ CLOSE ]
         </button>
       </div>
     </div>

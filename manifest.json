@@ -1,11 +1,11 @@
 {
   "name": "FogWalker",
   "short_name": "FogWalker",
-  "description": "日常の散歩をレトロRPGの冒険に変える、極限デフォルメ霧晴らしPWAアプリ",
+  "description": "歩いた場所だけが、光る。極限ミニマル位置情報アプリ",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0f141c",
-  "theme_color": "#1a202c",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "orientation": "portrait",
   "icons": [
     {
