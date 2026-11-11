@@ -47,12 +47,12 @@
       transform: scale(0.97);
     }
     .cui-btn-accent {
-      border-color: #16a34a;
-      color: #22c55e;
+      border-color: var(--theme-primary, #16a34a);
+      color: var(--theme-primary, #22c55e);
     }
     .cui-btn-accent:active {
-      background-color: #14532d;
-      color: #4ade80;
+      background-color: #1a1a1a;
+      color: #ffffff;
     }
 
     /* 点滅カーソルアニメーション */
@@ -62,6 +62,17 @@
     }
     .blinking-cursor {
       animation: cursor-blink 0.8s infinite;
+    }
+
+    /* レベルアップ＆通知トースト */
+    @keyframes toast-slide {
+      0% { transform: translateY(-20px); opacity: 0; }
+      15% { transform: translateY(0); opacity: 1; }
+      85% { transform: translateY(0); opacity: 1; }
+      100% { transform: translateY(-20px); opacity: 0; }
+    }
+    .toast-active {
+      animation: toast-slide 3.2s forwards;
     }
 
     /* セーフエリア対応 */
@@ -80,9 +91,9 @@
     <div class="flex items-start justify-between">
       <div class="space-y-0.5">
         <div class="flex items-center space-x-1.5 font-bold">
-          <span class="text-emerald-500">&gt;</span>
+          <span class="theme-accent">&gt;</span>
           <span class="text-white">FOG_WALKER</span>
-          <span class="text-[10px] text-neutral-500">v2.0</span>
+          <span class="text-[10px] text-neutral-500">v2.1</span>
           <span id="headerBlinker" class="inline-block w-1.5 h-3 bg-emerald-500 blinking-cursor ml-1"></span>
         </div>
         <div class="text-[11px] text-neutral-400">
@@ -91,13 +102,16 @@
           TILES: <span id="statTiles" class="text-white font-bold">0</span> <span class="text-[10px] text-neutral-500" id="statLevel">(LV: 01)</span>
         </div>
         <div class="text-[10px] text-neutral-500 font-mono">
-          <span class="text-neutral-600">&gt;</span> GLOBAL: <span id="statGlobalPct" class="text-emerald-400">0.0000000%</span>
-          <span class="text-[9px] text-neutral-600" id="statGlobalCount">[0 / 2,266,958,222,222]</span>
+          <span class="text-neutral-600">&gt;</span> GLOBAL: <span id="statGlobalPct" class="theme-accent font-bold">0.00000000%</span>
+          <span class="text-[9px] text-neutral-600" id="statGlobalArea">[0 ㎡ / 2.26T TILES]</span>
         </div>
       </div>
 
       <!-- 右上アクションボタン -->
       <div class="flex items-center space-x-1.5">
+        <button id="btnToggleTheme" class="cui-btn px-2 py-1 text-[10px] rounded" title="カラーテーマ切替">
+          COLOR: GRN
+        </button>
         <button id="btnToggleSound" class="cui-btn px-2 py-1 text-[10px] rounded" title="SE音量切替">
           SE: ON
         </button>
@@ -112,16 +126,33 @@
   <main class="flex-1 w-full relative overflow-hidden bg-black flex items-center justify-center">
     <canvas id="gameCanvas" class="absolute inset-0 w-full h-full block"></canvas>
 
-    <!-- 測位ステータスバッジ（左下） -->
+    <!-- レベルアップ通知トースト -->
+    <div id="toastNotification" class="absolute top-4 pointer-events-none z-30 hidden">
+      <div class="bg-black/95 border border-emerald-500 text-white px-3 py-1.5 rounded shadow-lg font-mono text-xs flex items-center space-x-2">
+        <span class="theme-accent font-bold">&gt;&gt;</span>
+        <span id="toastMessage" class="text-emerald-400 font-bold">LEVEL UP! [LV: 02]</span>
+      </div>
+    </div>
+
+    <!-- 測位ステータスバッジ（左上） -->
     <div id="gpsStatusBadge" class="absolute top-2 left-2 z-10 bg-black/80 border border-neutral-800 text-neutral-400 text-[10px] px-2 py-0.5 rounded font-mono flex items-center space-x-1.5">
       <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" id="gpsIndicator"></span>
       <span id="gpsStatusText">GPS: INIT...</span>
     </div>
 
-    <!-- リセンターボタン（右下） -->
-    <div class="absolute right-3 bottom-3 z-10">
+    <!-- 右側フローティング操作ボタン群（ズーム・リセンター・ポスター） -->
+    <div class="absolute right-3 bottom-3 z-10 flex flex-col space-y-1.5">
+      <button id="btnExportPoster" class="cui-btn cui-btn-accent w-9 h-9 rounded flex items-center justify-center text-sm" title="軌跡ポスター画像書き出し">
+        🖼️
+      </button>
+      <button id="btnZoomIn" class="cui-btn w-9 h-9 rounded flex items-center justify-center text-xs text-white" title="拡大">
+        +
+      </button>
+      <button id="btnZoomOut" class="cui-btn w-9 h-9 rounded flex items-center justify-center text-xs text-white" title="縮小">
+        -
+      </button>
       <button id="btnRecenter" class="cui-btn w-9 h-9 rounded flex items-center justify-center text-xs text-white" title="自機位置に戻る">
-        [+]
+        ⌖
       </button>
     </div>
   </main>
@@ -149,7 +180,7 @@
           <button id="btnPadUp" class="cui-btn text-white text-[10px] py-1 rounded flex items-center justify-center">▲</button>
           <div></div>
           <button id="btnPadLeft" class="cui-btn text-white text-[10px] py-1 rounded flex items-center justify-center">◀</button>
-          <button id="btnPadCenter" class="cui-btn text-emerald-400 text-[9px] py-1 rounded flex items-center justify-center font-bold">●</button>
+          <button id="btnPadCenter" class="cui-btn theme-accent text-[9px] py-1 rounded flex items-center justify-center font-bold">●</button>
           <button id="btnPadRight" class="cui-btn text-white text-[10px] py-1 rounded flex items-center justify-center">▶</button>
           <div></div>
           <button id="btnPadDown" class="cui-btn text-white text-[10px] py-1 rounded flex items-center justify-center">▼</button>
@@ -177,15 +208,16 @@
           <div class="text-neutral-500 text-[10px]">&gt; STATUS</div>
           <div>連続開拓日数: <span id="modalStreak" class="text-amber-400 font-bold">1</span> 日</div>
           <div>開拓済みマス: <span id="modalTiles" class="text-white font-bold">0</span> マス</div>
+          <div>開拓総面積: <span id="modalArea" class="text-emerald-400 font-bold">0</span> ㎡</div>
           <div>踏破推定距離: <span id="modalDistance" class="text-sky-400 font-bold">0</span> m</div>
-          <div>地球開拓進捗: <span id="modalGlobal" class="text-emerald-400 font-bold">0.0000000%</span></div>
+          <div>地球開拓進捗: <span id="modalGlobal" class="theme-accent font-bold">0.00000000%</span></div>
         </div>
 
         <div class="bg-black p-2 border border-neutral-900 rounded space-y-2">
-          <div class="text-neutral-500 text-[10px]">&gt; DATA_MANAGEMENT (IndexedDB)</div>
-          <div class="text-[9px] text-neutral-500 leading-tight">
-            開拓マスデータは端末内部（IndexedDB）にのみ保存され、完全0円・オフラインで動作します。
-          </div>
+          <div class="text-neutral-500 text-[10px]">&gt; ACTIONS & EXPORT</div>
+          <button id="btnModalExportPoster" class="cui-btn cui-btn-accent w-full py-1.5 text-[11px] rounded font-bold flex items-center justify-center space-x-1">
+            <span>🖼️ 軌跡ポスター画像書き出し (PNG)</span>
+          </button>
           <div class="flex space-x-1.5 pt-1">
             <button id="btnExportData" class="cui-btn flex-1 py-1 text-[10px] rounded text-white">
               [ EXPORT_JSON ]
