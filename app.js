@@ -54,6 +54,9 @@
     // 直近の日別記録（ヒートマップ用、最大60日）
     history: [],
 
+    // 最後にいた位置（再起動時に復元）
+    lastPos: null,
+
     // 動作モード
     mode: 'gps', // 'gps' | 'dpad'
     gpsMode: 'high', // 'high' | 'eco'
@@ -255,6 +258,7 @@
               if (m.key === 'gpsMode' && (m.value === 'high' || m.value === 'eco')) state.gpsMode = m.value;
               if (m.key === 'achievements' && Array.isArray(m.value)) state.achievements = m.value;
               if (m.key === 'history' && Array.isArray(m.value)) state.history = m.value;
+              if (m.key === 'lastPos' && m.value && Number.isFinite(m.value.lat) && Number.isFinite(m.value.lng)) state.lastPos = m.value;
             });
           }
         };
@@ -262,6 +266,7 @@
         tx.oncomplete = () => {
           rolloverDaily();
           applyTheme(state.themeIndex);
+          syncGpsModeButton();
           updateUI();
           resolve();
         };
@@ -865,6 +870,10 @@
     state.lat = lat;
     state.lng = lng;
 
+    // 最後の位置を保存（再起動時に同じ場所から始める）
+    state.lastPos = { lat, lng };
+    saveMetaToDB('lastPos', state.lastPos);
+
     revealTilesAt(lat, lng);
   }
 
@@ -1051,9 +1060,6 @@
 
     // GPS 精度モード（高精度 / 省電力）切替
     const btnGpsMode = document.getElementById('btnToggleGpsMode');
-    const syncGpsModeButton = () => {
-      if (btnGpsMode) btnGpsMode.textContent = state.gpsMode === 'eco' ? 'GPS: ECO' : 'GPS: HIGH';
-    };
     syncGpsModeButton();
     btnGpsMode?.addEventListener('click', () => {
       playBlip(900, 0.03);
@@ -1140,6 +1146,12 @@
     });
   }
 
+  // GPSモードボタンの表示を状態に合わせる
+  function syncGpsModeButton() {
+    const btn = document.getElementById('btnToggleGpsMode');
+    if (btn) btn.textContent = state.gpsMode === 'eco' ? 'GPS: ECO' : 'GPS: HIGH';
+  }
+
   // ==========================================
   // 13. バックアップJSONの復元
   // ==========================================
@@ -1214,8 +1226,12 @@
     await initDB();
     await loadAllFromDB();
 
-    // 初期マスの展開
-    revealTilesAt(state.lat, state.lng);
+    // 前回いた位置があればそこから再開（なければ最初の測位を待つ）
+    if (state.lastPos) {
+      state.lat = state.lastPos.lat;
+      state.lng = state.lastPos.lng;
+      revealTilesAt(state.lat, state.lng);
+    }
     updateUI();
 
     // デフォルトでGPS起動
